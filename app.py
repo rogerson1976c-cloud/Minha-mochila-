@@ -1,58 +1,42 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import os
+from datetime import datetime, timedelta
 
-# Configuração da Página
-st.set_page_config(page_title="Mochila Rogerson", page_icon="🎒")
+# Configuração da página
+st.set_page_config(page_title="Mochila de Emergência Familiar", layout="wide")
 
-# Nome do arquivo de dados
-DB_FILE = "estoque_mochila.csv"
+st.title("🎒 Mochila de Emergência Familiar")
+st.write("Controle de itens e validades em tempo real.")
 
-def carregar_dados():
-    if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        # Tenta pegar a data de modificação do arquivo
-        mod_time = os.path.getmtime(DB_FILE)
-        dt_mod = datetime.fromtimestamp(mod_time).strftime('%d/%m/%Y às %H:%M')
-        return df, dt_mod
-    return pd.DataFrame(columns=["Item", "Categoria", "Data de Validade"]), "Nenhuma"
+# Estrutura de dados com categorias e itens
+itens = [
+    {"Categoria": "Alimentação", "Item": "Água Mineral", "Validade": "2026-06-01"},
+    {"Categoria": "Alimentação", "Item": "Barras de Proteína", "Validade": "2026-02-15"},
+    {"Categoria": "Saúde", "Item": "Medicamentos Erisipela", "Validade": "2026-01-20"},
+    {"Categoria": "Saúde", "Item": "Primeiros Socorros", "Validade": "2027-10-10"},
+    {"Categoria": "Higiene", "Item": "Sabonete/Álcool em Gel", "Validade": "2026-12-31"},
+    {"Categoria": "Ferramentas", "Item": "Lanterna e Pilhas", "Validade": "2028-05-01"},
+]
 
-# Carregamento inicial
-estoque, ultima_atualizacao = carregar_dados()
+df = pd.DataFrame(itens)
+df['Validade'] = pd.to_datetime(df['Validade'])
 
-st.title("🎒 Minha Mochila")
-st.info(f"🕒 Última atualização na nuvem: {ultima_atualizacao}")
+# Lógica de Alerta de 90 dias
+def calcular_status(data):
+    hoje = datetime.now()
+    if data < hoje:
+        return "🔴 VENCIDO"
+    elif data <= hoje + timedelta(days=90):
+        return "🟡 VENCE EM 90 DIAS"
+    else:
+        return "🟢 OK"
 
-# --- INTERFACE DE ADIÇÃO ---
-with st.expander("➕ Adicionar/Editar Itens"):
-    with st.form("form_item", clear_on_submit=True):
-        nome = st.text_input("Nome do Item")
-        cat = st.selectbox("Categoria", ["Alimentação", "Saúde", "Ferramentas", "Outros"])
-        indet = st.checkbox("Validade Indeterminada")
-        val = st.date_input("Data de Validade")
-        
-        if st.form_submit_button("Sincronizar com a Nuvem"):
-            data_txt = "Indeterminada" if indet else val.strftime('%d/%m/%Y')
-            novo = pd.DataFrame([[nome, cat, data_txt]], columns=estoque.columns)
-            estoque = pd.concat([estoque, novo], ignore_index=True)
-            estoque.to_csv(DB_FILE, index=False)
-            st.success("Atualizado na nuvem e disponível para todos os seus aparelhos!")
-            st.rerun()
+df['Status'] = df['Validade'].apply(calcular_status)
 
-# --- TABELA DE ITENS ---
-st.write("### Itens no Inventário")
-st.dataframe(estoque, use_container_width=True)
+# Exibição por Categorias
+for categoria in df['Categoria'].unique():
+    st.subheader(f"📁 {categoria}")
+    sub_df = df[df['Categoria'] == categoria]
+    st.table(sub_df[['Item', 'Validade', 'Status']])
 
-# --- FUNÇÃO OFFLINE ---
-st.write("---")
-st.subheader("🌐 Modo Offline")
-st.write("Para acessar sem sinal, clique no botão abaixo e salve o arquivo. Se a internet cair, você abre este arquivo no seu celular.")
-
-csv = estoque.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="📥 Baixar Versão Offline Atualizada",
-    data=csv,
-    file_name=f'mochila_backup_{datetime.now().strftime("%d-%m")}.csv',
-    mime='text/csv',
-)
+st.info("Para editar os itens, basta me pedir para alterar o código aqui no chat!")
